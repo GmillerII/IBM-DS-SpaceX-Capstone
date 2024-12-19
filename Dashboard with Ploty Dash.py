@@ -6,8 +6,9 @@ from dash.dependencies import Input, Output
 import plotly.express as px
 import requests
 from io import StringIO
+
 #####
-    #Load Data
+# Load Data
 #####
 URL = "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DS0321EN-SkillsNetwork/datasets/spacex_launch_dash.csv"
 
@@ -35,7 +36,6 @@ try:
         # Load into DataFrame
         spacex_df = pd.read_csv(raw_data)
         print(spacex_df.head(5))
-        #print(spacex_df.unique("launch Site"))
     else:
         raise ValueError("The URL does not point to a valid CSV file.")
 
@@ -51,6 +51,7 @@ except Exception as e:
 if spacex_df.empty:
     raise RuntimeError("Failed to load SpaceX data. Please check the URL or connection.")
 
+# Get min and max payload for slider
 max_payload = spacex_df['Payload Mass (kg)'].max()
 min_payload = spacex_df['Payload Mass (kg)'].min()
 
@@ -63,6 +64,7 @@ app.layout = html.Div(children=[
         'SpaceX Launch Records Dashboard',
         style={'textAlign': 'center', 'color': '#503D36', 'font-size': 40}
     ),
+    # Dropdown for selecting launch sites
     dcc.Dropdown(
         id='site-dropdown',
         options=[
@@ -77,8 +79,13 @@ app.layout = html.Div(children=[
         searchable=True
     ),
     html.Br(),
-    html.Div(dcc.Graph(id = 'success-pie-chart')),
+    # Pie chart for total successful launches
+    html.Div(dcc.Graph(id='success-pie-chart')),
     html.Br(),
+    # Pie chart for success vs failure ratio
+    html.Div(dcc.Graph(id='success-ratio-pie-chart')),
+    html.Br(),
+    # Slider for payload range
     html.P("Payload range (Kg):"),
     dcc.RangeSlider(
         id='payload-slider',
@@ -87,6 +94,7 @@ app.layout = html.Div(children=[
         step=1000,
         value=[min_payload, max_payload]
     ),
+    # Scatter plot for payload vs success
     html.Div(dcc.Graph(id='success-payload-scatter-chart')),
 ])
 
@@ -94,30 +102,69 @@ app.layout = html.Div(children=[
 # Add a callback function for `site-dropdown` as input, `success-pie-chart` as output
 # Function decorator to specify function input and output
 @app.callback(
-    Output(component_id = 'success-pie-chart', component_property = 'figure'),
-    Input(component_id = 'site-dropdown', component_property = 'value')
+    Output(component_id='success-pie-chart', component_property='figure'),
+    Input(component_id='site-dropdown', component_property='value')
 )
 def get_pie_chart(entered_site):
+    # Generate pie chart for total successful launches
     if entered_site == 'ALL':
         fig = px.pie(spacex_df, 
             values='class', 
             names='Launch Site', 
-            title='Total Sucessful Launches for All Sites'
+            title='Total Successful Launches for All Sites'
         )
         return fig
     else:
+        # Filter data for the selected site
         filtered_df = spacex_df[spacex_df['Launch Site'] == entered_site]
-        fig = px.pie(spacex_df, values='class', 
-        names='class', 
-        title=f"Total Sucessful Launches for {entered_site}")
+        fig = px.pie(filtered_df, 
+            values='class', 
+            names='class', 
+            title=f"Total Successful Launches for {entered_site}")
         return fig
-        # return the outcomes piechart for a selected site
+
+# TASK 3:
+# Add a callback function for success vs failure ratio pie chart
+@app.callback(
+    Output(component_id='success-ratio-pie-chart', component_property='figure'),
+    Input(component_id='site-dropdown', component_property='value')
+)
+def get_success_ratio_pie_chart(entered_site):
+    # Generate pie chart for success vs failure ratio
+    if entered_site == 'ALL':
+        # Aggregate total successes and failures for all sites
+        success_fail_counts = spacex_df['class'].value_counts().reset_index()
+        success_fail_counts.columns = ['Outcome', 'Count']
+        success_fail_counts['Outcome'] = success_fail_counts['Outcome'].map({1: 'Success', 0: 'Failure'})
+
+        fig = px.pie(
+            success_fail_counts, 
+            values='Count', 
+            names='Outcome', 
+            title='Success vs Failure Ratio for All Sites'
+        )
+        return fig
+    else:
+        # Filter data for the selected site
+        filtered_df = spacex_df[spacex_df['Launch Site'] == entered_site]
+        success_fail_counts = filtered_df['class'].value_counts().reset_index()
+        success_fail_counts.columns = ['Outcome', 'Count']
+        success_fail_counts['Outcome'] = success_fail_counts['Outcome'].map({1: 'Success', 0: 'Failure'})
+
+        fig = px.pie(
+            success_fail_counts, 
+            values='Count', 
+            names='Outcome', 
+            title=f"Success vs Failure Ratio for {entered_site}"
+        )
+        return fig
+
 # TASK 4:
 # Add a callback function for `site-dropdown` and `payload-slider` as inputs, `success-payload-scatter-chart` as output
 @app.callback(
-    Output(component_id = 'success-payload-scatter-chart', component_property = 'figure'),
-    [Input(component_id = 'site-dropdown', component_property = 'value'), 
-    Input(component_id = "payload-slider", component_property = "value")]
+    Output(component_id='success-payload-scatter-chart', component_property='figure'),
+    [Input(component_id='site-dropdown', component_property='value'), 
+    Input(component_id="payload-slider", component_property="value")]
 )
 def get_scatter_chart(entered_site, payload_range):
     # Initialize filtered_df with the full dataframe
